@@ -4,3 +4,4 @@ gym[Box2D]
 box2d
 tqdm
 numpy
+pyglet==1.3.2

@@ -97,10 +97,15 @@ def to_latent(obs, next_obs):
                        mode='bilinear', align_corners=True)
             for x in (obs, next_obs)]
 
-        latent_obs, latent_next_obs = [
+        (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
             vae(x)[1:] for x in (obs, next_obs)]
 
-    return latent_obs, latent_next_obs
+        (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
+            (x_mu.view(BSIZE, SEQ_LEN, LSIZE), x_logsigma.view(BSIZE, SEQ_LEN, LSIZE))
+            for x_mu, x_logsigma in
+            [(obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma)]]
+
+    return (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma)
 
 def get_loss(latent_obs, action, reward, terminal,
              latent_next_obs, include_reward: bool):

@@ -131,7 +131,7 @@ def get_loss(latent_obs, action, reward, terminal,
                                                 *latent_next_obs]]
     latent_obs = (latent_obs_mu, latent_obs_logsigma)
     latent_next_obs = (latent_next_obs_mu, latent_next_obs_logsigma)
-    mus, logsigmas, logpi, rs, ds = mdrnn(action, latent_obs)
+    mus, logsigmas, logpi, rs, ds = mdrnn(action, latent_obs[0])
     gmm = gmm_loss(latent_next_obs, mus, logsigmas, logpi)
     bce = f.binary_cross_entropy_with_logits(ds, terminal)
     if include_reward:

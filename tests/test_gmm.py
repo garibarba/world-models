@@ -23,9 +23,8 @@ class TestGMM(unittest.TestCase):
 
         cat_dist = Categorical(pi)
         indices = cat_dist.sample((n_samples,)).long()
-        rands = torch.randn(n_samples, 2)
 
-        samples = means[indices] + rands * stds[indices]
+        samples = means[indices], stds[indices]
 
         class _model(nn.Module):
             def __init__(self, gaussians):
@@ -45,7 +44,9 @@ class TestGMM(unittest.TestCase):
         pbar = tqdm(total=iterations)
         cum_loss = 0
         for i in range(iterations):
-            batch = samples[torch.LongTensor(128).random_(0, n_samples)]
+            batch = (samples[0][torch.LongTensor(128).random_(0, n_samples)],
+                     samples[1][torch.LongTensor(128).random_(0, n_samples)])
+
             m, s, p = model.forward()
             loss = gmm_loss(batch, m, s, p)
             cum_loss += loss.item()

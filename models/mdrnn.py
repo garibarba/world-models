@@ -5,9 +5,9 @@ on the latent space.
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
-from torch.distributions.normal import Normal
+from torch.distributions import MultivariateNormal
 
-def gmm_loss(batch, mus, sigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
+def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
 
     Compute an upper bound to the KL divergence of the normal observation and
@@ -17,9 +17,9 @@ def gmm_loss(batch, mus, sigmas, logpi, reduce=True): # pylint: disable=too-many
     when you have both a batch axis and a time step axis), gs the number of
     mixtures and fs the number of features.
 
-    :args batch: (bs1, bs2, *, fs) torch tensor
+    :args batch: ((bs1, bs2, *, fs),) * 2 tuple of torch tensor for (mus, logsigmas)
     :args mus: (bs1, bs2, *, gs, fs) torch tensor
-    :args sigmas: (bs1, bs2, *, gs, fs) torch tensor
+    :args logsigmas: (bs1, bs2, *, gs, fs) torch tensor
     :args logpi: (bs1, bs2, *, gs) torch tensor
     :args reduce: if not reduce, the mean in the following formula is ommited
 
@@ -31,20 +31,17 @@ def gmm_loss(batch, mus, sigmas, logpi, reduce=True): # pylint: disable=too-many
     NOTE: The loss is not reduced along the feature dimension (i.e. it should scale ~linearily
     with fs).
     """
-    batch = batch.unsqueeze(-2)
-    normal_dist = Normal(mus, sigmas)
-    g_log_probs = normal_dist.log_prob(batch)
-    g_log_probs = logpi + torch.sum(g_log_probs, dim=-1)
-    max_log_probs = torch.max(g_log_probs, dim=-1, keepdim=True)[0]
-    g_log_probs = g_log_probs - max_log_probs
+    batch_mus, batch_sigmas = batch[0].unsqueeze(-2), batch[1].unsqueeze(-2).exp()
+    gmm_normal_dist = MultivariateNormal(mus, logsigmas.exp().diag_embed())
+    normal_dist = MultivariateNormal(batch_mus, batch_sigmas.diag_embed())
+    pis = torch.softmax(logpi, dim=-1)
 
-    g_probs = torch.exp(g_log_probs)
-    probs = torch.sum(g_probs, dim=-1)
+    kl_divs_normal = torch.distributions.kl_divergence(normal_dist, gmm_normal_dist)
+    kl_divs_gmm_upper_bound = (kl_divs_normal * pis).sum(-1)
 
-    log_prob = max_log_probs.squeeze() + torch.log(probs)
     if reduce:
-        return - torch.mean(log_prob)
-    return - log_prob
+        return torch.mean(kl_divs_gmm_upper_bound)
+    return kl_divs_gmm_upper_bound
 
 class _MDRNNBase(nn.Module):
     def __init__(self, latents, actions, hiddens, gaussians):

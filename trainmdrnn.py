@@ -88,8 +88,8 @@ def to_latent(obs, next_obs):
     :args next_obs: 5D torch tensor (BSIZE, SEQ_LEN, ASIZE, SIZE, SIZE)
 
     :returns: (latent_obs, latent_next_obs)
-        - latent_obs: 4D torch tensor (BSIZE, SEQ_LEN, LSIZE)
-        - next_latent_obs: 4D torch tensor (BSIZE, SEQ_LEN, LSIZE)
+        - latent_obs: tuple of 2* 4D torch tensor (BSIZE, SEQ_LEN, LSIZE)
+        - next_latent_obs: tuple of 2* 4D torch tensor (BSIZE, SEQ_LEN, LSIZE)
     """
     with torch.no_grad():
         obs, next_obs = [
@@ -97,13 +97,9 @@ def to_latent(obs, next_obs):
                        mode='bilinear', align_corners=True)
             for x in (obs, next_obs)]
 
-        (obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma) = [
+        latent_obs, latent_next_obs = [
             vae(x)[1:] for x in (obs, next_obs)]
 
-        latent_obs, latent_next_obs = [
-            (x_mu + x_logsigma.exp() * torch.randn_like(x_mu)).view(BSIZE, SEQ_LEN, LSIZE)
-            for x_mu, x_logsigma in
-            [(obs_mu, obs_logsigma), (next_obs_mu, next_obs_logsigma)]]
     return latent_obs, latent_next_obs
 
 def get_loss(latent_obs, action, reward, terminal,

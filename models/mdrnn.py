@@ -10,11 +10,12 @@ from torch.distributions.normal import Normal
 def gmm_loss(batch, mus, sigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
 
-    Compute minus the log probability of batch under the GMM model described
-    by mus, sigmas, pi. Precisely, with bs1, bs2, ... the sizes of the batch
-    dimensions (several batch dimension are useful when you have both a batch
-    axis and a time step axis), gs the number of mixtures and fs the number of
-    features.
+    Compute an upper bound to the KL divergence of the normal observation and
+    the gmm prediction KL(N||GMM) <= sum_i(pi_i * KL(N||N_i)) of batch under
+    the GMM model described by mus, sigmas, pi. Precisely, with bs1, bs2, ...
+    the sizes of the batch dimensions (several batch dimension are useful
+    when you have both a batch axis and a time step axis), gs the number of
+    mixtures and fs the number of features.
 
     :args batch: (bs1, bs2, *, fs) torch tensor
     :args mus: (bs1, bs2, *, gs, fs) torch tensor

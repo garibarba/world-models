@@ -121,12 +121,16 @@ def get_loss(latent_obs, action, reward, terminal,
     :returns: dictionary of losses, containing the gmm, the mse, the bce and
         the averaged loss.
     """
-    latent_obs, action,\
+    latent_obs_mu, latent_obs_logsigma,\
+        action,\
         reward, terminal,\
-        latent_next_obs = [arr.transpose(1, 0)
-                           for arr in [latent_obs, action,
-                                       reward, terminal,
-                                       latent_next_obs]]
+        latent_next_obs_mu,\
+        latent_next_obs_logsigma = [arr.transpose(1, 0)
+                                    for arr in [*latent_obs, action,
+                                                reward, terminal,
+                                                *latent_next_obs]]
+    latent_obs = (latent_obs_mu, latent_obs_logsigma)
+    latent_next_obs = (latent_next_obs_mu, latent_next_obs_logsigma)
     mus, logsigmas, logpi, rs, ds = mdrnn(action, latent_obs)
     gmm = gmm_loss(latent_next_obs, mus, logsigmas, logpi)
     bce = f.binary_cross_entropy_with_logits(ds, terminal)

@@ -32,11 +32,13 @@ def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-m
     with fs).
     """
     batch_mus, batch_sigmas = batch[0].unsqueeze(-2), batch[1].unsqueeze(-2).exp()
-    gmm_normal_dist = MultivariateNormal(mus, logsigmas.exp().diag_embed())
-    normal_dist = MultivariateNormal(batch_mus, batch_sigmas.diag_embed())
+    sigmas = logsigmas.exp()
     pis = torch.softmax(logpi, dim=-1)
 
-    kl_divs_normal = torch.distributions.kl_divergence(normal_dist, gmm_normal_dist)
+    kl_divs_normal = 0.5 * ((batch_sigmas / sigmas).sum(-1)
+                            + ((mus - batch_mus)**2 / sigmas).sum(-1)
+                            - sigmas.shape[-1]
+                            + (sigmas.prod(-1) / batch_sigmas.prod(-1)).log())
     kl_divs_gmm_upper_bound = (kl_divs_normal * pis).sum(-1)
 
     if reduce:

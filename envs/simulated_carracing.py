@@ -81,11 +81,11 @@ class SimulatedCarracing(gym.Env): # pylint: disable=too-many-instance-attribute
         """ One step forward """
         with torch.no_grad():
             action = torch.Tensor(action).unsqueeze(0)
-            mu, sigma, pi, r, d, n_h = self._rnn(action, self._lstate, self._hstate)
+            mu, logsigma, pi, r, d, n_h = self._rnn(action, self._lstate, self._hstate)
             pi = pi.squeeze()
             mixt = Categorical(torch.exp(pi)).sample().item()
 
-            self._lstate = mu[:, mixt, :] # + sigma[:, mixt, :] * torch.randn_like(mu[:, mixt, :])
+            self._lstate = mu[:, mixt, :] # + logsigma[:, mixt, :].exp() * torch.randn_like(mu[:, mixt, :])
             self._hstate = n_h
 
             self._obs = self._decoder(self._lstate)

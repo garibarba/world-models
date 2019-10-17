@@ -71,11 +71,11 @@ class MDRNN(_MDRNNBase):
         :args actions: (SEQ_LEN, BSIZE, ASIZE) torch tensor
         :args latents: (SEQ_LEN, BSIZE, LSIZE) torch tensor
 
-        :returns: mu_nlat, sig_nlat, pi_nlat, rs, ds, parameters of the GMM
+        :returns: mu_nlat, logsig_nlat, pi_nlat, rs, ds, parameters of the GMM
         prediction for the next latent, gaussian prediction of the reward and
         logit prediction of terminality.
             - mu_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
-            - sigma_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
+            - logsigma_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
             - logpi_nlat: (SEQ_LEN, BSIZE, N_GAUSS) torch tensor
             - rs: (SEQ_LEN, BSIZE) torch tensor
             - ds: (SEQ_LEN, BSIZE) torch tensor
@@ -91,9 +91,8 @@ class MDRNN(_MDRNNBase):
         mus = gmm_outs[:, :, :stride]
         mus = mus.view(seq_len, bs, self.gaussians, self.latents)
 
-        sigmas = gmm_outs[:, :, stride:2 * stride]
-        sigmas = sigmas.view(seq_len, bs, self.gaussians, self.latents)
-        sigmas = torch.exp(sigmas)
+        logsigmas = gmm_outs[:, :, stride:2 * stride]
+        logsigmas = logsigmas.view(seq_len, bs, self.gaussians, self.latents)
 
         pi = gmm_outs[:, :, 2 * stride: 2 * stride + self.gaussians]
         pi = pi.view(seq_len, bs, self.gaussians)
@@ -103,7 +102,7 @@ class MDRNN(_MDRNNBase):
 
         ds = gmm_outs[:, :, -1]
 
-        return mus, sigmas, logpi, rs, ds
+        return mus, logsigmas, logpi, rs, ds
 
 class MDRNNCell(_MDRNNBase):
     """ MDRNN model for one step forward """
@@ -139,16 +138,16 @@ class MDRNNCell(_MDRNNBase):
         mus = out_full[:, :stride]
         mus = mus.view(-1, self.gaussians, self.latents)
 
-        sigmas = out_full[:, stride:2 * stride]
-        sigmas = sigmas.view(-1, self.gaussians, self.latents)
-        sigmas = torch.exp(sigmas)
+        logsigmas = out_full[:, stride:2 * stride]
+        logsigmas = logsigmas.view(-1, self.gaussians, self.latents)
 
         pi = out_full[:, 2 * stride:2 * stride + self.gaussians]
         pi = pi.view(-1, self.gaussians)
-        logpi = f.log_softmax(pi, dim=-1)
+        logpis = f.log_softmax(pi, dim=-1)
 
         r = out_full[:, -2]
 
         d = out_full[:, -1]
 
-        return mus, sigmas, logpi, r, d, next_hidden
+        return mus, logsigmas, logpis, r, d, next_hidden
+

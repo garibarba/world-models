@@ -2,6 +2,7 @@
 Define MDRNN model, supposed to be used as a world model
 on the latent space.
 """
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
@@ -151,3 +152,109 @@ class MDRNNCell(_MDRNNBase):
 
         return mus, logsigmas, logpis, r, d, next_hidden
 
+class FMDRNNCell(MDRNNCell):
+    """ Filtering MDRNNCell. Keeps previous output for filtering. """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.prev_gmm = None
+        self._gmm_sampler = MyGMMSampler.apply
+
+    def reset(self):
+        self.prev_gmm = None
+
+    def forward(self, action, latents, hidden):
+        """
+        latents: (mus, logsigmas)
+        """
+        if self.prev_gmm:
+            mus, logsigmas, logpi = self._filter(latents)
+            latent_input = self._gmm_sampler(mus, logsigmas, logpi)
+        else:
+            latent_input = latents[0] # deterministic. TODO: sampled?
+        mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
+        self.prev_gmm = (mus, logsigmas, logpi)
+
+        return mus, logsigmas, logpi, r, d, next_hiden
+
+    def _filter(self, latents):
+        lat_mus, lat_logsigmas = tuple(map(lambda x: torch.unsqueeze(x, dim=-2),
+                                           latents))
+        gmm_mus, gmm_logsigmas, gmm_logpi = self.prev_gmm
+
+        mus, logsigmas, = prod_multivariate_normals((lat_mus, lat_logsigmas),
+                                                    (gmm_mus, gmm_logsigmas))
+        joint_logconstant = log_constant_term_multivariate_normal(mus, logsigmas)
+        lat_logconstant = log_constant_term_multivariate_normal(lat_mus, lat_logsigmas)
+        gmm_logconstant = log_constant_term_multivariate_normal(gmm_mus, gmm_logsigmas)
+
+        logpi = gmm_logpi + lat_logconstant + gmm_logconstant - joint_logconstant
+
+        return mus, logsigmas, logpi
+
+def prod_multivariate_normals(normal_1, normal_2):
+    """
+    mean and logstd from the normal resulting of multiplying 2 normals
+    """
+    mus_1, logsigmas_1 = normal_1
+    mus_2, logsigmas_2 = normal_2
+
+    sigmas_1_sq, sigmas_2_sq = logsigmas_1.exp() ** 2, logsigmas_2.exp() ** 2
+
+    mus = (mus_1 * sigmas_2_sq + mus_2 * sigmas_1_sq) / (sigmas_1_sq + sigmas_2_sq)
+    logsigmas = - 0.5 * torch.log(1 / sigmas_1_sq + 1 / sigmas_2_sq)
+
+    return mus, logsigmas
+
+def log_constant_term_multivariate_normal(mus, logsigmas):
+    """
+    The constant term in a multivariate normal distribution refers to
+    the term including all terms that do not depend on x.
+    """
+    sigmas = logsigmas.exp()
+    d = mus.shape[-1]
+
+    return - 0.5 * (d * torch.log(2 * np.pi)
+                    + (sigmas ** 2).prod(dim=-1)
+                    - ((mus / sigmas) ** 2).sum(-1)
+                    )
+
+class MyGMMSampler(torch.autograd.Function):
+  @staticmethod
+  def forward(ctx, mus, sigma_logits, pi_logits):
+    k = torch.distributions.Categorical(logits=pi_logits).sample()
+    dims = sigma_logits.shape
+    meshindexes = torch.meshgrid(
+        *[torch.arange(d) for d in dims[:-2]]) if len(dims) > 2 else tuple()
+    indexes = meshindexes + (slice(None),) + (k,)
+    x = torch.distributions.MultivariateNormal(
+        mus[indexes], torch.diag_embed(torch.exp(sigma_logits[indexes]))).sample()
+    ctx.save_for_backward(mus, sigma_logits, pi_logits, x)
+    return x
+
+  @staticmethod
+  def backward(ctx, grad_output):
+    mus, sigma_logits, pi_logits, x = ctx.saved_tensors
+
+    log_probs = torch.empty_like(pi_logits)
+    for i in range(log_probs.shape[-1]):
+      log_probs[..., i] = torch.distributions.MultivariateNormal(
+          mus[..., i], torch.diag_embed(torch.exp(sigma_logits[..., i]))).log_prob(x)
+    class_posterior_logits = log_probs + pi_logits
+    class_posterior_probs = torch.softmax(class_posterior_logits, 0)
+    grad_samples = grad_output.unsqueeze(-1) * \
+        class_posterior_probs.unsqueeze(-2)
+    assert grad_samples.shape == mus.shape
+    assert grad_samples.shape == sigma_logits.shape
+
+    with torch.enable_grad():
+      sigmas = torch.exp(sigma_logits)
+      normal_samples = (x.unsqueeze(-1) - mus) / sigmas
+      normal_samples.detach_()
+      x_resamples = normal_samples * sigmas + mus
+      grad_mus, grad_sigma_logits = torch.autograd.grad(
+          x_resamples, [mus, sigma_logits], grad_samples)
+
+    grad_pi_logits = grad_output.unsqueeze(-2).matmul(x.unsqueeze(-1)).squeeze(-1) * (
+        class_posterior_probs - torch.softmax(pi_logits, 0))
+
+    return grad_mus, grad_sigma_logits, grad_pi_logits

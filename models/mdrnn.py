@@ -258,3 +258,37 @@ class MyGMMSampler(torch.autograd.Function):
         class_posterior_probs - torch.softmax(pi_logits, 0))
 
     return grad_mus, grad_sigma_logits, grad_pi_logits
+
+class FMDRNN(_MDRNNBase):
+    """ MDRNN model for multi steps forward """
+    def __init__(self, latents, actions, hiddens, gaussians):
+        super().__init__(latents, actions, hiddens, gaussians)
+        self.cell = FMDRNNCell(latents, actions, hiddens, gaussians)
+
+    def forward(self, actions, latents): # pylint: disable=arguments-differ
+        """ MULTI STEPS forward.
+
+        :args actions: (SEQ_LEN, BSIZE, ASIZE) torch tensor
+        :args latents: (SEQ_LEN, BSIZE, LSIZE) torch tensor
+
+        :returns: mu_nlat, logsig_nlat, pi_nlat, rs, ds, parameters of the GMM
+        prediction for the next latent, gaussian prediction of the reward and
+        logit prediction of terminality.
+            - mu_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
+            - logsigma_nlat: (SEQ_LEN, BSIZE, N_GAUSS, LSIZE) torch tensor
+            - logpi_nlat: (SEQ_LEN, BSIZE, N_GAUSS) torch tensor
+            - rs: (SEQ_LEN, BSIZE) torch tensor
+            - ds: (SEQ_LEN, BSIZE) torch tensor
+        """
+        seq_len, bs = actions.size(0), actions.size(1)
+        self.cell.reset()
+        hidden = actions.new(bs, self.hiddens).zero_()
+        for action, latent in zip(actions, latents):
+            cell_returns = self.cell(action, latent, hidden)
+            outputs, hidden = cell_returns[:-1], cell_returns[-1]
+        
+        mus, logsigmas, logpi, rs, ds = tuple(map(torch.stack,
+                                                  outputs
+                                                  ))
+        
+        return mus, logsigmas, logpi, rs, ds

@@ -17,7 +17,7 @@ from utils.learning import ReduceLROnPlateau
 
 from data.loaders import RolloutSequenceDataset
 from models.vae import VAE
-from models.mdrnn import MDRNN, gmm_loss
+from models.mdrnn import FMDRNN, gmm_loss
 
 parser = argparse.ArgumentParser("MDRNN training")
 parser.add_argument('--logdir', type=str,
@@ -53,7 +53,7 @@ rnn_file = join(rnn_dir, 'best.tar')
 if not exists(rnn_dir):
     mkdir(rnn_dir)
 
-mdrnn = MDRNN(LSIZE, ASIZE, RSIZE, 5)
+mdrnn = FMDRNN(LSIZE, ASIZE, RSIZE, 5)
 mdrnn.to(device)
 optimizer = torch.optim.RMSprop(mdrnn.parameters(), lr=1e-3, alpha=.9)
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5)

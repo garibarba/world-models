@@ -282,7 +282,7 @@ class FMDRNN(_MDRNNBase):
         """
         seq_len, bs = actions.size(0), actions.size(1)
         self.cell.reset()
-        hidden = actions.new(bs, self.hiddens).zero_()
+        hidden = (actions.new(bs, self.hiddens).zero_(),) * 2
         for action, latent in zip(actions, latents):
             cell_returns = self.cell(action, latent, hidden)
             outputs, hidden = cell_returns[:-1], cell_returns[-1]

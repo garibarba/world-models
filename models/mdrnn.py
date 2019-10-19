@@ -226,8 +226,7 @@ class MyGMMSampler(torch.autograd.Function):
     meshindexes = torch.meshgrid(
         *[torch.arange(d) for d in dims[:-2]]) if len(dims) > 2 else tuple()
     indexes = meshindexes + (slice(None),) + (k,)
-    x = torch.distributions.MultivariateNormal(
-        mus[indexes], torch.diag_embed(torch.exp(sigma_logits[indexes]))).sample()
+    x = torch.randn_like(mus[indexes]) * torch.exp(sigma_logits[indexes]) + mus[indexes] # sample
     ctx.save_for_backward(mus, sigma_logits, pi_logits, x)
     return x
 

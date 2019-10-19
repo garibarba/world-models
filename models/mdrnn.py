@@ -213,7 +213,7 @@ def log_constant_term_multivariate_normal(mus, logsigmas):
     sigmas = logsigmas.exp()
     d = mus.shape[-1]
 
-    return - 0.5 * (d * torch.log(2 * np.pi)
+    return - 0.5 * (d * np.log(2 * np.pi)
                     + (sigmas ** 2).prod(dim=-1)
                     - ((mus / sigmas) ** 2).sum(-1)
                     )

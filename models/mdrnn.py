@@ -289,12 +289,14 @@ class FMDRNN(_MDRNNBase):
         seq_len, bs = actions.size(0), actions.size(1)
         self.cell.reset()
         hidden = (actions.new(bs, self.hiddens).zero_(),) * 2
+        outputs = []
         for action, mu, logsigma in zip(actions, *latents):
             cell_returns = self.cell(action, (mu, logsigma), hidden)
-            outputs, hidden = cell_returns[:-1], cell_returns[-1]
+            cell_outputs, hidden = cell_returns[:-1], cell_returns[-1]
+            outputs.append(cell_outputs)
         
         mus, logsigmas, logpi, rs, ds = tuple(map(torch.stack,
-                                                  outputs
+                                                  zip(*outputs)
                                                   ))
         
         return mus, logsigmas, logpi, rs, ds

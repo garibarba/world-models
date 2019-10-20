@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
-from torch.distributions import MultivariateNormal
 
 def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
@@ -163,9 +162,12 @@ class FMDRNNCell(MDRNNCell):
         self.prev_gmm = None
 
     def forward(self, action, latents, hidden):
-        """
-        latents: (mus, logsigmas)
-        """
+        """ ONE STEP forward.
+
+        :args actions: (BSIZE, ASIZE) torch tensor
+        :args latents: 2 * ((BSIZE, LSIZE),) tuple of torch tensor
+        :args hidden: (BSIZE, RSIZE) torch tensor
+        """ 
         if self.prev_gmm:
             mus, logsigmas, logpi = self._filter(latents)
             latent_input = self._gmm_sampler(mus, logsigmas, logpi)
@@ -218,6 +220,12 @@ def log_constant_term_multivariate_normal(mus, logsigmas):
                     - ((mus / sigmas) ** 2).sum(-1)
                     )
 
+def log_prob_multivariate_normal(x, mus, sigma_logits): 
+  sigmas = sigma_logits.exp()
+  return - 0.5 * (x.shape[-1] * np.log(2 * np.pi)
+                  + (sigmas ** 2).prod(-1).log()
+                  + (((x - mus) / sigmas) ** 2).sum(-1))
+
 class MyGMMSampler(torch.autograd.Function):
   @staticmethod
   def forward(ctx, mus, sigma_logits, pi_logits):
@@ -236,8 +244,7 @@ class MyGMMSampler(torch.autograd.Function):
 
     log_probs = torch.empty_like(pi_logits)
     for i in range(log_probs.shape[-1]):
-      log_probs[..., i] = torch.distributions.MultivariateNormal(
-          mus[..., i], torch.diag_embed(torch.exp(sigma_logits[..., i]))).log_prob(x)
+        log_probs[..., i] = log_prob_multivariate_normal(x, mus[..., i, :], sigma_logits[..., i, :])
     class_posterior_logits = log_probs + pi_logits
     class_posterior_probs = torch.softmax(class_posterior_logits, 0)
     grad_samples = grad_output.unsqueeze(-1) * \

@@ -260,7 +260,7 @@ class MyGMMSampler(torch.autograd.Function):
       grad_mus, grad_sigma_logits = torch.autograd.grad(
           x_resamples, [mus, sigma_logits], grad_samples)
 
-    grad_pi_logits = (grad_output * x).sum(-1) * (
+    grad_pi_logits = (grad_output * x).sum(-1, keepdim=True) * (
         class_posterior_probs - torch.softmax(pi_logits, -1))
 
     return grad_mus, grad_sigma_logits, grad_pi_logits

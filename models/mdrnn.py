@@ -233,7 +233,7 @@ class MyGMMSampler(torch.autograd.Function):
     dims = sigma_logits.shape
     meshindexes = torch.meshgrid(
         *[torch.arange(d) for d in dims[:-2]]) if len(dims) > 2 else tuple()
-    indexes = meshindexes + (slice(None),) + (k,)
+    indexes = meshindexes + (k,) + (slice(None),)
     x = torch.randn_like(mus[indexes]) * torch.exp(sigma_logits[indexes]) + mus[indexes] # sample
     ctx.save_for_backward(mus, sigma_logits, pi_logits, x)
     return x
@@ -246,7 +246,7 @@ class MyGMMSampler(torch.autograd.Function):
     for i in range(log_probs.shape[-1]):
         log_probs[..., i] = log_prob_multivariate_normal(x, mus[..., i, :], sigma_logits[..., i, :])
     class_posterior_logits = log_probs + pi_logits
-    class_posterior_probs = torch.softmax(class_posterior_logits, 0)
+    class_posterior_probs = torch.softmax(class_posterior_logits, -1)
     grad_samples = grad_output.unsqueeze(-1) * \
         class_posterior_probs.unsqueeze(-2)
     assert grad_samples.shape == mus.shape
@@ -261,7 +261,7 @@ class MyGMMSampler(torch.autograd.Function):
           x_resamples, [mus, sigma_logits], grad_samples)
 
     grad_pi_logits = grad_output.unsqueeze(-2).matmul(x.unsqueeze(-1)).squeeze(-1) * (
-        class_posterior_probs - torch.softmax(pi_logits, 0))
+        class_posterior_probs - torch.softmax(pi_logits, -1))
 
     return grad_mus, grad_sigma_logits, grad_pi_logits
 

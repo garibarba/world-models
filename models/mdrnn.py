@@ -247,20 +247,20 @@ class MyGMMSampler(torch.autograd.Function):
         log_probs[..., i] = log_prob_multivariate_normal(x, mus[..., i, :], sigma_logits[..., i, :])
     class_posterior_logits = log_probs + pi_logits
     class_posterior_probs = torch.softmax(class_posterior_logits, -1)
-    grad_samples = grad_output.unsqueeze(-1) * \
-        class_posterior_probs.unsqueeze(-2)
+    grad_samples = grad_output.unsqueeze(-2) * \
+        class_posterior_probs.unsqueeze(-1)
     assert grad_samples.shape == mus.shape
     assert grad_samples.shape == sigma_logits.shape
 
     with torch.enable_grad():
       sigmas = torch.exp(sigma_logits)
-      normal_samples = (x.unsqueeze(-1) - mus) / sigmas
+      normal_samples = (x.unsqueeze(-2) - mus) / sigmas
       normal_samples.detach_()
       x_resamples = normal_samples * sigmas + mus
       grad_mus, grad_sigma_logits = torch.autograd.grad(
           x_resamples, [mus, sigma_logits], grad_samples)
 
-    grad_pi_logits = grad_output.unsqueeze(-2).matmul(x.unsqueeze(-1)).squeeze(-1) * (
+    grad_pi_logits = (grad_output * x).sum(-1) * (
         class_posterior_probs - torch.softmax(pi_logits, -1))
 
     return grad_mus, grad_sigma_logits, grad_pi_logits

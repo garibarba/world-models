@@ -173,7 +173,7 @@ class FMDRNNCell(MDRNNCell):
             latent_input = self._gmm_sampler(mus, logsigmas, logpi)
         else:
             latent_input = latents[0] # deterministic. TODO: sampled?
-        latent_input.detach_()
+        latent_input = latent_input.detach()
         mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
         self.prev_gmm = (mus, logsigmas, logpi)
 

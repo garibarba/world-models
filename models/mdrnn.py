@@ -266,11 +266,10 @@ class MyGMMSampler(torch.autograd.Function):
 
     return grad_mus, grad_sigma_logits, grad_pi_logits
 
-class FMDRNN(_MDRNNBase):
+class FMDRNN(FMDRNNCell):
     """ MDRNN model for multi steps forward """
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
-        self.rnn = FMDRNNCell(latents, actions, hiddens, gaussians)
 
     def forward(self, actions, latents): # pylint: disable=arguments-differ
         """ MULTI STEPS forward.
@@ -288,11 +287,11 @@ class FMDRNN(_MDRNNBase):
             - ds: (SEQ_LEN, BSIZE) torch tensor
         """
         seq_len, bs = actions.size(0), actions.size(1)
-        self.rnn.reset()
+        self.reset()
         hidden = (actions.new(bs, self.hiddens).zero_(),) * 2
         outputs = []
         for action, mu, logsigma in zip(actions, *latents):
-            cell_returns = self.rnn(action, (mu, logsigma), hidden)
+            cell_returns = super().forward(action, (mu, logsigma), hidden)
             cell_outputs, hidden = cell_returns[:-1], cell_returns[-1]
             outputs.append(cell_outputs)
         

@@ -15,7 +15,8 @@ class mcLSTMCell(nn.Module):
                             (3 + self.num_channels) * self.hidden_size)
 
     def forward(self, input, hidden):
-        gates = self.ih(input) + self.hh(torch.cat(hidden[:-1], dim=-1))
+        hxs, cx = hidden[:-1], hidden[-1]
+        gates = self.ih(input) + self.hh(torch.cat(hxs, dim=-1))
 
         chunked_gates = gates.chunk(3 + self.num_channels, dim=-1)
         (ingate, forgetgate, cellgate), outgates = chunked_gates[:3], chunked_gates[3:]
@@ -25,7 +26,7 @@ class mcLSTMCell(nn.Module):
         cellgate = F.tanh(cellgate)
         outgates = [F.sigmoid(og) for og in outgates]
 
-        cy = (forgetgate * self.cx) + (ingate * cellgate)
+        cy = (forgetgate * cx) + (ingate * cellgate)
         cy_tanh = F.tanh(cy)
         hys = [og * cy_tanh for og in outgates]
         

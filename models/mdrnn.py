@@ -137,8 +137,8 @@ class MDRNNCell(_MDRNNBase):
         out_rnn = next_hidden[:-1]
 
         out_full_0 = self.gmm_linear_0(out_rnn[0])
-        out_full_1 = self.gmm_linear_1(out_rnn[1])
-        out_full_2 = self.gmm_linear_2(out_rnn[2])
+        out_full_1 = self.gmm_linear_1(out_rnn[1]).squeeze(-1)
+        out_full_2 = self.gmm_linear_2(out_rnn[2]).squeeze(-1)
 
         stride = self.gaussians * self.latents
 

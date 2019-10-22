@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
+from .mclstm import mcLSTMCell
 
 def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
@@ -55,6 +56,10 @@ class _MDRNNBase(nn.Module):
 
         self.gmm_linear = nn.Linear(
             hiddens, (2 * latents + 1) * gaussians + 2)
+        
+        self.gmm_linear_0 = nn.Linear(hiddens, (2 * latents + 1) * gaussians)
+        self.gmm_linear_1 = nn.Linear(hiddens, 1)
+        self.gmm_linear_2 = nn.Linear(hiddens, 1)
 
     def forward(self, *inputs):
         pass
@@ -108,7 +113,7 @@ class MDRNNCell(_MDRNNBase):
     """ MDRNN model for one step forward """
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
-        self.rnn = nn.LSTMCell(latents + actions, hiddens)
+        self.rnn = mcLSTMCell(latents + actions, hiddens)
 
     def forward(self, action, latent, hidden): # pylint: disable=arguments-differ
         """ ONE STEP forward.
@@ -129,25 +134,27 @@ class MDRNNCell(_MDRNNBase):
         in_al = torch.cat([action, latent], dim=1)
 
         next_hidden = self.rnn(in_al, hidden)
-        out_rnn = next_hidden[0]
+        out_rnn = next_hidden[:-1]
 
-        out_full = self.gmm_linear(out_rnn)
+        out_full_0 = self.gmm_linear_0(out_rnn[0])
+        out_full_1 = self.gmm_linear_1(out_rnn[1])
+        out_full_2 = self.gmm_linear_2(out_rnn[2])
 
         stride = self.gaussians * self.latents
 
-        mus = out_full[:, :stride]
+        mus = out_full_0[:, :stride]
         mus = mus.view(-1, self.gaussians, self.latents)
 
-        logsigmas = out_full[:, stride:2 * stride]
+        logsigmas = out_full_0[:, stride:2 * stride]
         logsigmas = logsigmas.view(-1, self.gaussians, self.latents)
 
-        pi = out_full[:, 2 * stride:2 * stride + self.gaussians]
+        pi = out_full_0[:, 2 * stride:2 * stride + self.gaussians]
         pi = pi.view(-1, self.gaussians)
         logpis = f.log_softmax(pi, dim=-1)
 
-        r = out_full[:, -2]
+        r = out_full_1
 
-        d = out_full[:, -1]
+        d = out_full_2
 
         return mus, logsigmas, logpis, r, d, next_hidden
 

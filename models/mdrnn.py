@@ -113,7 +113,7 @@ class MDRNNCell(_MDRNNBase):
     """ MDRNN model for one step forward """
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
-        self.rnn = mcLSTMCell(latents + actions, hiddens)
+        self.rnn = mcLSTMCell(latents + actions, hiddens, num_channels=3)
 
     def forward(self, action, latent, hidden): # pylint: disable=arguments-differ
         """ ONE STEP forward.

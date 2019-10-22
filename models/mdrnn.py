@@ -296,7 +296,7 @@ class FMDRNN(FMDRNNCell):
         """
         seq_len, bs = actions.size(0), actions.size(1)
         self.reset()
-        hidden = (actions.new(bs, self.hiddens).zero_(),) * 2
+        hidden = (actions.new(bs, self.hiddens).zero_(),) * 4
         outputs = []
         for action, mu, logsigma in zip(actions, *latents):
             cell_returns = super().forward(action, (mu, logsigma), hidden, detach_input=detach_input)

@@ -1,5 +1,6 @@
 import torch
-from torch import nn
+import torch.nn as nn
+import torch.nn.functional as F
 
 class mcLSTMCell(nn.Module):
     def __init__(self, input_size, hidden_size, num_channels=1):

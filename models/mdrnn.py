@@ -161,7 +161,7 @@ class FMDRNNCell(MDRNNCell):
     def reset(self):
         self.prev_gmm = None
 
-    def forward(self, action, latents, hidden):
+    def forward(self, action, latents, hidden, detach_input=True):
         """ ONE STEP forward.
 
         :args actions: (BSIZE, ASIZE) torch tensor
@@ -173,7 +173,8 @@ class FMDRNNCell(MDRNNCell):
             latent_input = self._gmm_sampler(mus, logsigmas, logpi)
         else:
             latent_input = latents[0] # deterministic. TODO: sampled?
-        latent_input = latent_input.detach()
+        if detach_input:
+            latent_input = latent_input.detach()
         mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
         self.prev_gmm = (mus, logsigmas, logpi)
 
@@ -271,7 +272,7 @@ class FMDRNN(FMDRNNCell):
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
 
-    def forward(self, actions, latents): # pylint: disable=arguments-differ
+    def forward(self, actions, latents, detach_input=True): # pylint: disable=arguments-differ
         """ MULTI STEPS forward.
 
         :args actions: (SEQ_LEN, BSIZE, ASIZE) torch tensor
@@ -291,7 +292,7 @@ class FMDRNN(FMDRNNCell):
         hidden = (actions.new(bs, self.hiddens).zero_(),) * 2
         outputs = []
         for action, mu, logsigma in zip(actions, *latents):
-            cell_returns = super().forward(action, (mu, logsigma), hidden)
+            cell_returns = super().forward(action, (mu, logsigma), hidden, detach_input=detach_input)
             cell_outputs, hidden = cell_returns[:-1], cell_returns[-1]
             outputs.append(cell_outputs)
         

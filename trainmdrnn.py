@@ -141,11 +141,10 @@ def get_loss(latent_obs, action, reward, terminal,
     bce = f.binary_cross_entropy_with_logits(ds, terminal)
     if include_reward:
         mse = f.mse_loss(rs, reward)
-        scale = LSIZE + 2
     else:
         mse = 0
-        scale = LSIZE + 1
-    loss = (gmm + bce + mse) / scale
+    scale = LSIZE
+    loss = (gmm / scale + bce + mse)
     return dict(gmm=gmm, bce=bce, mse=mse, loss=loss)
 
 

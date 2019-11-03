@@ -113,7 +113,7 @@ class MDRNNCell(_MDRNNBase):
     """ MDRNN model for one step forward """
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
-        self.rnn = mcLSTMCell(latents + actions, hiddens, num_channels=3)
+        self.rnn = mcLSTMCell([actions, latents], hiddens, num_channels=3)
 
     def forward(self, action, latent, hidden): # pylint: disable=arguments-differ
         """ ONE STEP forward.
@@ -131,7 +131,7 @@ class MDRNNCell(_MDRNNBase):
             - rs: (BSIZE) torch tensor
             - ds: (BSIZE) torch tensor
         """
-        in_al = torch.cat([action, latent], dim=1)
+        in_al = [action, latent]
 
         next_hidden = self.rnn(in_al, hidden)
         out_rnn = next_hidden[:-1]

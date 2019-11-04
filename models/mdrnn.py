@@ -194,6 +194,8 @@ class FMDRNNCell(MDRNNCell):
         mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
         self.prev_gmm = (mus, logsigmas, logpi)
 
+        if action_policy:
+            return mus, logsigmas, logpi, r, d, next_hiden, action
         return mus, logsigmas, logpi, r, d, next_hiden
 
     def _filter(self, latents):

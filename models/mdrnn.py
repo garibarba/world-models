@@ -168,20 +168,29 @@ class FMDRNNCell(MDRNNCell):
     def reset(self):
         self.prev_gmm = None
 
-    def forward(self, action, latents, hidden, detach_input=True):
+    def forward(self, action, latents, hidden,
+                detach_input=True,
+                action_policy=None):
         """ ONE STEP forward.
 
         :args actions: (BSIZE, ASIZE) torch tensor
         :args latents: 2 * ((BSIZE, LSIZE),) tuple of torch tensor
         :args hidden: (BSIZE, RSIZE) torch tensor
+        :args detach_input: bool, detach filtered input
+        :args action_policy: bool, ignore actions if present
         """ 
         if self.prev_gmm:
             mus, logsigmas, logpi = self._filter(latents)
             latent_input = self._gmm_sampler(mus, logsigmas, logpi)
         else:
             latent_input = latents[0] # deterministic. TODO: sampled?
+
         if detach_input:
             latent_input = latent_input.detach()
+
+        if action_policy:
+            action = action_policy([latent_input] + list(hiddens[:-1]))
+        
         mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
         self.prev_gmm = (mus, logsigmas, logpi)
 

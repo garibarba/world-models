@@ -189,7 +189,10 @@ class FMDRNNCell(MDRNNCell):
             latent_input = latent_input.detach()
 
         if action_policy:
-            action = action_policy([latent_input] + list(hidden[:-1]))
+            action_hidden = list(hidden[:-1])
+            if detach_input:
+                action_hidden = [h.detach() for h in action_hidden]
+            action = action_policy([latent_input] + action_hidden)
         
         mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
         self.prev_gmm = (mus, logsigmas, logpi)

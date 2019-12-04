@@ -113,9 +113,9 @@ class MDRNNCell(_MDRNNBase):
     """ MDRNN model for one step forward """
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
-        self.rnn = mcLSTMCell([actions, latents], hiddens, num_channels=3)
+        self.rnn = mcLSTMCell([actions, latents, 1], hiddens, num_channels=3)
 
-    def forward(self, action, latent, hidden): # pylint: disable=arguments-differ
+    def forward(self, action, latent, reward, hidden): # pylint: disable=arguments-differ
         """ ONE STEP forward.
 
         :args actions: (BSIZE, ASIZE) torch tensor
@@ -131,7 +131,7 @@ class MDRNNCell(_MDRNNBase):
             - rs: (BSIZE) torch tensor
             - ds: (BSIZE) torch tensor
         """
-        in_al = [action, latent]
+        in_al = [action, latent, reward]
 
         next_hidden = self.rnn(in_al, hidden)
         out_rnn = next_hidden[:-1]
@@ -168,7 +168,7 @@ class FMDRNNCell(MDRNNCell):
     def reset(self):
         self.prev_gmm = None
 
-    def forward(self, action, latents, hidden,
+    def forward(self, action, latents, reward, hidden,
                 detach_input=True,
                 action_policy=None):
         """ ONE STEP forward.
@@ -194,7 +194,7 @@ class FMDRNNCell(MDRNNCell):
                 action_hidden = [h.detach() for h in action_hidden]
             action = action_policy([latent_input] + action_hidden)
         
-        mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, hidden)
+        mus, logsigmas, logpi, r, d, next_hiden = super().forward(action, latent_input, reward, hidden)
         self.prev_gmm = (mus, logsigmas, logpi)
 
         if action_policy:

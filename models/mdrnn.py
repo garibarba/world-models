@@ -57,9 +57,9 @@ class _MDRNNBase(nn.Module):
         self.gmm_linear = nn.Linear(
             hiddens, (2 * latents + 1) * gaussians + 2)
         
-        self.gmm_linear_0 = nn.Linear(hiddens, (2 * latents + 1) * gaussians)
-        self.gmm_linear_1 = nn.Linear(hiddens, 1)
-        self.gmm_linear_2 = nn.Linear(hiddens, 1)
+        self.gmm_linear_0 = nn.Linear(hiddens, (2 * latents + 1) * gaussians) # latent
+        self.gmm_linear_1 = nn.Linear(hiddens, 2)  # reward 
+        self.gmm_linear_2 = nn.Linear(hiddens, 1)  # done
 
     def forward(self, *inputs):
         pass

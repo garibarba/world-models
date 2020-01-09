@@ -170,7 +170,9 @@ class FMDRNNCell(MDRNNCell):
 
     def forward(self, action, latents, reward, hidden,
                 detach_input=True,
-                action_policy=None):
+                action_policy=None,
+                filter_input=True,
+                input_weight=1.0):
         """ ONE STEP forward.
 
         :args actions: (BSIZE, ASIZE) torch tensor
@@ -179,11 +181,18 @@ class FMDRNNCell(MDRNNCell):
         :args detach_input: bool, detach filtered input
         :args action_policy: bool, ignore actions if present
         """ 
-        if self.prev_gmm:
+        if self.prev_gmm and filter_input:
             mus, logsigmas, logpi = self._filter(latents)
             latent_input = self._gmm_sampler(mus, logsigmas, logpi)
         else:
             latent_input = latents[0] # deterministic. TODO: sampled?
+
+        if not input_weight == 1.0:
+            assert input_weight >= 0.0 and input_weight <= 1.0
+            remaining_weight = 1.0 - input_weight
+            num_hidden_inputs = len(hidden) - 1
+            updated_weight = 1.0 + remaining_weight / num_hidden_inputs
+            hidden = [h * updated_weight for h in hidden[:-1]] + [hidden[-1]]
 
         if detach_input:
             latent_input = latent_input.detach()
@@ -293,7 +302,7 @@ class FMDRNN(FMDRNNCell):
     def __init__(self, latents, actions, hiddens, gaussians):
         super().__init__(latents, actions, hiddens, gaussians)
 
-    def forward(self, actions, latents, detach_input=True): # pylint: disable=arguments-differ
+    def forward(self, actions, latents, detach_input=True, filter_input=True, input_weight=1.0): # pylint: disable=arguments-differ
         """ MULTI STEPS forward.
 
         :args actions: (SEQ_LEN, BSIZE, ASIZE) torch tensor
@@ -313,7 +322,7 @@ class FMDRNN(FMDRNNCell):
         hidden = (actions.new(bs, self.hiddens).zero_(),) * 4
         outputs = []
         for action, mu, logsigma in zip(actions, *latents):
-            cell_returns = super().forward(action, (mu, logsigma), hidden, detach_input=detach_input)
+            cell_returns = super().forward(action, (mu, logsigma), hidden, detach_input=detach_input, filter_input=filter_input, input_weight=input_weight)
             cell_outputs, hidden = cell_returns[:-1], cell_returns[-1]
             outputs.append(cell_outputs)
         

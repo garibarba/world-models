@@ -193,6 +193,7 @@ class FMDRNNCell(MDRNNCell):
             num_hidden_inputs = len(hidden) - 1
             updated_weight = 1.0 + remaining_weight / num_hidden_inputs
             hidden = [h * updated_weight for h in hidden[:-1]] + [hidden[-1]]
+            latent_input = latent_input * input_weight
 
         if detach_input:
             latent_input = latent_input.detach()

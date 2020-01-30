@@ -6,11 +6,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
-from torch.distributions import MultivariateNormal
+from torch.distributions import Normal, MultivariateNormal
 from torch.distributions.kl import kl_divergence
 from .mclstm import mcLSTMCell
 
-def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
+def gmm_loss_bound(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
 
     Compute an upper bound to the KL divergence of the normal observation and
@@ -46,6 +46,48 @@ def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-m
     if reduce:
         return torch.mean(kl_divs_gmm_upper_bound)
     return kl_divs_gmm_upper_bound
+
+def gmm_loss_prob(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
+    """ Computes the gmm loss.
+
+    Compute minus the log probability of batch under the GMM model described
+    by mus, sigmas, pi. Precisely, with bs1, bs2, ... the sizes of the batch
+    dimensions (several batch dimension are useful when you have both a batch
+    axis and a time step axis), gs the number of mixtures and fs the number of
+    features.
+
+    :args batch: ((bs1, bs2, *, fs),) * 2 tuple of torch tensor for (mus, logsigmas)
+    :args mus: (bs1, bs2, *, gs, fs) torch tensor
+    :args sigmas: (bs1, bs2, *, gs, fs) torch tensor
+    :args logpi: (bs1, bs2, *, gs) torch tensor
+    :args reduce: if not reduce, the mean in the following formula is ommited
+
+    :returns:
+    loss(batch) = - mean_{i1=0..bs1, i2=0..bs2, ...} log(
+        sum_{k=1..gs} pi[i1, i2, ..., k] * N(
+            batch[i1, i2, ..., :] | mus[i1, i2, ..., k, :], sigmas[i1, i2, ..., k, :]))
+
+    NOTE: The loss is not reduced along the feature dimension (i.e. it should scale ~linearily
+    with fs).
+    """
+    
+    batch_mus, batch_sigmas = batch[0].unsqueeze(-2), batch[1].unsqueeze(-2).exp()
+    batch_dist = Normal(batch_mus, batch_sigmas)
+    batch = batch_dist.sample()
+    sigmas = logsigmas.exp()
+    normal_dist = Normal(mus, sigmas)
+    g_log_probs = normal_dist.log_prob(batch)
+    g_log_probs = logpi + torch.sum(g_log_probs, dim=-1)
+    max_log_probs = torch.max(g_log_probs, dim=-1, keepdim=True)[0]
+    g_log_probs = g_log_probs - max_log_probs
+
+    g_probs = torch.exp(g_log_probs)
+    probs = torch.sum(g_probs, dim=-1)
+
+    log_prob = max_log_probs.squeeze() + torch.log(probs)
+    if reduce:
+        return - torch.mean(log_prob)
+    return - log_prob
 
 class _MDRNNBase(nn.Module):
     def __init__(self, latents, actions, hiddens, gaussians):

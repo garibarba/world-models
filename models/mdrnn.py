@@ -6,6 +6,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
+from torch.distributions import MultivariateNormal
+from torch.distributions.kl import kl_divergence
 from .mclstm import mcLSTMCell
 
 def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
@@ -36,10 +38,9 @@ def gmm_loss(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-m
     sigmas = logsigmas.exp()
     pis = torch.softmax(logpi, dim=-1)
 
-    kl_divs_normal = 0.5 * ((batch_sigmas / sigmas).sum(-1)
-                            + ((mus - batch_mus)**2 / sigmas).sum(-1)
-                            - sigmas.shape[-1]
-                            + (sigmas.prod(-1) / batch_sigmas.prod(-1)).log())
+    mvn = MultivariateNormal(mus, scale_tril=torch.diag_embed(sigmas))
+    batch_mvn = MultivariateNormal(batch_mus, scale_tril=torch.diag_embed(batch_sigmas))
+    kl_divs_normal = kl_divergence(batch_mvn, mvn)
     kl_divs_gmm_upper_bound = (kl_divs_normal * pis).sum(-1)
 
     if reduce:

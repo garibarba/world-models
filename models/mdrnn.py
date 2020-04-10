@@ -10,6 +10,8 @@ from torch.distributions import Normal, MultivariateNormal
 from torch.distributions.kl import kl_divergence
 from .mclstm import mcLSTMCell
 
+EPS = 1e-8
+
 def gmm_loss_bound(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
 
@@ -283,7 +285,7 @@ def prod_multivariate_normals(normal_1, normal_2):
     mus_1, logsigmas_1 = normal_1
     mus_2, logsigmas_2 = normal_2
 
-    sigmas_1_sq, sigmas_2_sq = logsigmas_1.exp() ** 2, logsigmas_2.exp() ** 2
+    sigmas_1_sq, sigmas_2_sq = (2 * logsigmas_1).exp() + EPS, (2 * logsigmas_2).exp() + EPS
 
     mus = (mus_1 * sigmas_2_sq + mus_2 * sigmas_1_sq) / (sigmas_1_sq + sigmas_2_sq)
     logsigmas = - 0.5 * torch.log(1 / sigmas_1_sq + 1 / sigmas_2_sq)
@@ -299,15 +301,14 @@ def log_constant_term_multivariate_normal(mus, logsigmas):
     d = mus.shape[-1]
 
     return - 0.5 * (d * np.log(2 * np.pi)
-                    + (sigmas ** 2).prod(dim=-1)
+                    + (2 * logsigmas).sum(dim=-1)
                     - ((mus / sigmas) ** 2).sum(-1)
                     )
 
 def log_prob_multivariate_normal(x, mus, sigma_logits): 
   sigmas = sigma_logits.exp()
-  return - 0.5 * (x.shape[-1] * np.log(2 * np.pi)
-                  + (sigmas ** 2).prod(-1).log()
-                  + (((x - mus) / sigmas) ** 2).sum(-1))
+  mvn = MultivariateNormal(mus, scale_tril=torch.diag_embed(sigmas))
+  return mvn.log_prob(x)
 
 class MyGMMSampler(torch.autograd.Function):
   @staticmethod

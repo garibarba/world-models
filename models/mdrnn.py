@@ -244,7 +244,7 @@ class FMDRNNCell(MDRNNCell):
         if detach_input:
             latent_input = latent_input.detach()
 
-        if zero_input_grad and self.prev_gmm:
+        if zero_input_grad and latent_input.requires_grad:
             h = latent_input.register_hook(lambda grad: 0 * grad)
             self.input_hooks.append(h)
 

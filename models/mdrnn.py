@@ -209,15 +209,18 @@ class FMDRNNCell(MDRNNCell):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.prev_gmm = None
+        self.input_hooks = []
         self._gmm_sampler = MyGMMSampler.apply
 
     def reset(self):
         self.prev_gmm = None
+        self.input_hooks = []
 
     def forward(self, action, latents, reward, hidden,
                 detach_input=True,
                 action_policy=None,
                 filter_input=True,
+                zero_input_grad=True,
                 input_weight=1.0):
         """ ONE STEP forward.
 
@@ -225,6 +228,7 @@ class FMDRNNCell(MDRNNCell):
         :args latents: 2 * ((BSIZE, LSIZE),) tuple of torch tensor
         :args hidden: (BSIZE, RSIZE) torch tensor
         :args detach_input: bool, detach filtered input
+        :args zero_input_grad: book, attach hooks to filtered input to zero-out backward pass
         :args action_policy: bool, ignore actions if present
         """ 
         if self.prev_gmm and filter_input:
@@ -239,6 +243,10 @@ class FMDRNNCell(MDRNNCell):
 
         if detach_input:
             latent_input = latent_input.detach()
+
+        if zero_input_grad:
+            h = latent_input.register_hook(lambda grad: 0 * grad)
+            self.input_hooks.append(h)
 
         if action_policy:
             action_hidden = list(hidden[:-1])

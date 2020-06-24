@@ -49,6 +49,43 @@ def gmm_loss_bound(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable
         return torch.mean(kl_divs_gmm_upper_bound)
     return kl_divs_gmm_upper_bound
 
+def gmm_loss_bound_alt(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
+    """ Computes the gmm loss.
+
+    Compute an upper bound to the KL divergence of the normal observation and
+    the gmm prediction KL(GMM||N) <= sum_i(pi_i * KL(N_i||N)) of batch under
+    the GMM model described by mus, sigmas, pi. Precisely, with bs1, bs2, ...
+    the sizes of the batch dimensions (several batch dimension are useful
+    when you have both a batch axis and a time step axis), gs the number of
+    mixtures and fs the number of features.
+
+    :args batch: ((bs1, bs2, *, fs),) * 2 tuple of torch tensor for (mus, logsigmas)
+    :args mus: (bs1, bs2, *, gs, fs) torch tensor
+    :args logsigmas: (bs1, bs2, *, gs, fs) torch tensor
+    :args logpi: (bs1, bs2, *, gs) torch tensor
+    :args reduce: if not reduce, the mean in the following formula is ommited
+
+    :returns:
+    loss(batch) = - mean_{i1=0..bs1, i2=0..bs2, ...} log(
+        sum_{k=1..gs} pi[i1, i2, ..., k] * N(
+            batch[i1, i2, ..., :] | mus[i1, i2, ..., k, :], sigmas[i1, i2, ..., k, :]))
+
+    NOTE: The loss is not reduced along the feature dimension (i.e. it should scale ~linearily
+    with fs).
+    """
+    batch_mus, batch_sigmas = batch[0].unsqueeze(-2), batch[1].unsqueeze(-2).exp()
+    sigmas = logsigmas.exp()
+    pis = torch.softmax(logpi, dim=-1)
+
+    mvn = MultivariateNormal(mus, scale_tril=torch.diag_embed(sigmas))
+    batch_mvn = MultivariateNormal(batch_mus, scale_tril=torch.diag_embed(batch_sigmas))
+    kl_divs_normal = kl_divergence(mvn, batch_mvn)
+    kl_divs_gmm_upper_bound = (kl_divs_normal * pis).sum(-1)
+
+    if reduce:
+        return torch.mean(kl_divs_gmm_upper_bound)
+    return kl_divs_gmm_upper_bound
+
 def gmm_loss_prob(batch, mus, logsigmas, logpi, reduce=True): # pylint: disable=too-many-arguments
     """ Computes the gmm loss.
 
